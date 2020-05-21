@@ -3,146 +3,113 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
-//byte
-#define FS_SIZE 8192
+#include "bitmaps.h"
+#include "direntry.h"
+#include "fs_constants.h"
+#include "inode.h"
+#include "path.h"
 
-//tmp
-#define BLOCK_SIZE 128
-#define INODE_SIZE 32
-#define BLOCK_COUNT 16
-#define INODE_COUNT 4
-
-#define BLOCK_SECTION sizeof(superblock_t) + INODE_COUNT / 8 + BLOCK_COUNT / 8 + INODE_COUNT * INODE_SIZE
-#define INODE_SECTION sizeof(superblock_t) + INODE_COUNT / 8 + BLOCK_COUNT / 8;
 
 #define ROOT_INODE 0
-
-enum error {
-    EFILE = -1,
-    ENOSPACE = -2,
-    ELOCK = -3,
-    EREQBLOCK = -4,
-    ENOINODE = -5,
-    ENOTFOUND = -6,
-    EEOFILE = -9,
-};
-
-/*----------p a t h----------*/
-typedef struct path {
-    char * full_path;
-    char ** tokens;
-} path_t;
-path_t path_init(char * path);
-
 
 /*----------s u p e r b l o c k----------*/
 
 typedef struct superblock {
-    char magic[8];
-    size_t inode_count;
-    size_t block_count;
-    size_t inode_size;
-    size_t block_size;
-    size_t root_inode;
+  char magic[8];
+  uint32_t inode_count;
+  uint32_t block_count;
+  uint32_t inode_size;
+  uint32_t block_size;
 } superblock_t;
 
-superblock_t superblock_init();
+superblock_t superblock_init(); // doesn't need destroy
 bool superblock_compare(superblock_t * l, superblock_t * r);
-
-
-
-/*----------b i t m a p----------*/
-
-typedef struct inode_map {
-    char bitmap[INODE_SIZE/8];
-} inode_map_t;
-
-typedef struct block_map {
-    char bitmap[BLOCK_SIZE/8];
-} block_map_t;
-
-int bitmap_find_free(char * bitmap);
-int bitmap_set_lock(char * bitmap[], int id);
-int bitmap_set_free(char * bitmap[], int id);
-bool bitmap_is_lock(char * bitmap[], int id);
-
-
-
-/*----------i n o d e----------*/
-
-typedef struct inode {
-    size_t id;
-    size_t file_size;
-    size_t block_count;
-    time_t timestamp;
-    int address[4]; //TODO: warning! test value
-} inode_t;
-
-int inode_load_block(inode_t * inode, size_t offset);
-int inode_load_block_offset(inode_t * inode, size_t offset);
-int inode_add_block(inode_t * inode, int block_id);
-void inode_update_timestamp(inode_t * inode);
-char * inode_info_str(inode_t * inode);
-
 
 
 /*----------m j f s  a p i----------*/
 
 typedef struct mjfs_fs {
-    FILE * fs_file;
-    char * fs_file_name;
+  FILE * fs_file;
+  char * fs_file_name;
 
-    inode_map_t inode_map;
-    block_map_t block_map;
+  inode_map_t inode_map;
+  block_map_t block_map;
 
-    inode_t current_directory;
-    char * current_directory_name;
+  inode_t current_directory;
+  char * current_directory_name;
 } mjfs_fs_t;
 
 mjfs_fs_t init_dummy_fs();
 
-int fs_init(char * fs_file); // public
+int fs_init(char * fs_file); // public // EFILE
 
-int fs_mount(mjfs_fs_t * fs, char * fs_file); // public
+int fs_mount(mjfs_fs_t * fs, char * fs_file); // public // need to be free by unmount // EFILE
 void fs_unmount(mjfs_fs_t * fs); // public
 
-int fs_lock_inode(mjfs_fs_t * fs, int inode_id); // private
-void fs_free_inode(mjfs_fs_t * fs, int inode_id); // private
-int fs_lock_block(mjfs_fs_t * fs, int block_id); // private
-void fs_free_block(mjfs_fs_t * fs, int block_id); // private
+bool fs_is_root_init(mjfs_fs_t * fs); // private
+int fs_init_root(mjfs_fs_t * fs); // private
 
-bool fs_is_root_init(mjfs_fs_t * fs);
-int fs_init_root(mjfs_fs_t * fs);
-int fs_load_inode(mjfs_fs_t * fs, int inode_id, inode_t * inode); // private
-int fs_dump_inode(mjfs_fs_t * fs, inode_t * inode); // private
-int fs_find_inode(mjfs_fs_t *fs, char * path); // private return - inode_id
-int fs_recursive_search(mjfs_fs_t * fs, inode_t * inode, path_t * path, int path_part); // private
-int find_in_dir(mjfs_fs_t * fs, inode_t * inode, char * path); // private
+int fs_init_new_inode(mjfs_fs_t * fs, inode_t * new_inode); // private // ENOSPACE
+int fs_lock_inode(mjfs_fs_t * fs, int32_t inode_id); // private // ELOCK
+void fs_free_inode(mjfs_fs_t * fs, int32_t inode_id); // private
+int fs_lock_block(mjfs_fs_t * fs, int32_t block_id); // private // ELOCK
+void fs_free_block(mjfs_fs_t * fs, int32_t block_id); // private
 
-int fs_write(mjfs_fs_t * fs, inode_t * inode, void * buf, size_t buf_len, size_t offset); // private
-int fs_write_path(mjfs_fs_t * fs, char * path, void * buf, size_t buf_len, size_t offset); // public
-int fs_write_to_dir(mjfs_fs_t * fs, inode_t * dir, char * name);
-int fs_write_default_dir_info(mjfs_fs_t * fs, inode_t * dir);
+int fs_load_inode_by_path(mjfs_fs_t * fs, const char * path, inode_t * inode); // private // ENOTFOUND
+int fs_load_inode(mjfs_fs_t * fs, int32_t inode_id, inode_t * inode); // private // ENOINODE
+int fs_dump_inode(mjfs_fs_t * fs, int32_t inode_id, inode_t * inode); // private // ENOINODE
 
-int fs_read(mjfs_fs_t * fs, inode_t * inode, void * dest, size_t dest_len, size_t offset); // private
+// return inode_id
+int32_t fs_find_inode_by_path(mjfs_fs_t * fs, const char * path); // private // ENOTFOUND
+int32_t fs_find_recursive(mjfs_fs_t * fs, inode_t * inode, path_t * path, int path_part); // private // ENOTFOUND
+int32_t fs_find_inode_in_dir(mjfs_fs_t * fs, inode_t * dir, const char * name); // private // ENOTFOUND or ENOTADIR
 
-int fs_set_current_directory(mjfs_fs_t * fs, char * directory); // public
-char * fs_pwd(mjfs_fs_t * fs);
+int fs_delete_direntry_by_name(mjfs_fs_t * fs, inode_t * dir, const char * name); // private // ENOTFOUND
+int fs_delete_file_inode(mjfs_fs_t * fs, inode_t * deleted); // private
+int fs_delete_from_dir_by_name(mjfs_fs_t * fs, inode_t * dir, const char * name, bool recursive); // private // ENOTFOUND or ENOTADIR
 
-int fs_create_directory(mjfs_fs_t * fs, char * directory); // public
-int fs_create_file(); // public
+int fs_write(mjfs_fs_t * fs, inode_t * inode, void * buf, uint32_t buf_len,
+             uint32_t offset); // private // ENOSPACE or written bytes
+int fs_write_to_dir(mjfs_fs_t * fs, inode_t * dir, direntry_t direntry); // private // ENOSPACE or 0
 
-int fs_delete_directory(); // public
-int fs_delete_file(); // public
+int fs_read(mjfs_fs_t * fs, inode_t * inode, void * dest, uint32_t dest_len,
+        uint32_t offset); // private // EOFILE or read_bytes
+int fs_read_from_dir(mjfs_fs_t * fs, inode_t * dir, uint32_t offset, direntry_t * direntry); // private // EOFILE
 
-int fs_lookup_directory(); // public
+int fs_reload_current_dir(mjfs_fs_t * fs); // private
 
-//cp and mv!
+//A P I
+int fs_lookup_directory(mjfs_fs_t * fs, const char * directory); // public // ENOTFOUND
+int fs_set_current_directory(mjfs_fs_t * fs, const char * directory); // public // ENOTFOUND
+char * fs_pwd(mjfs_fs_t * fs); // does not to be free // could be NULL
 
-int fs_cp_to_host(); // public
-int fs_cp_from_host(); //public
+int fs_create_directory(mjfs_fs_t * fs, const char * directory); // public // ENOSPACE or ENOTFOUND
+int fs_create_file(mjfs_fs_t * fs, const char * file_name); // public // ENOSPACE or ENOTFOUND
+
+int fs_delete_directory(mjfs_fs_t * fs, const char * directory); // public // ENOTFOUND or ENOTADIR
+int fs_delete_file(mjfs_fs_t * fs, const char * file); // public // ENOTFOUND or ENOTADIR
+
+int fs_load_to(mjfs_fs_t * fs, const char * external, const char * file);
+int fs_store_from(mjfs_fs_t * fs, const char * file, const char * external);
+
+int fs_cat(mjfs_fs_t * fs, const char * file);
+
+/*----------d i r  e n t r y---------*/
+typedef struct direntry_iter {
+  uint32_t read_offset;
+  uint32_t direntry_offset;
+  direntry_t direntry;
+  direntry_t * next_direntry;
+  inode_t dir_inode;
+} direntry_iter_t;
+
+direntry_iter_t direntry_iter_init(mjfs_fs_t * fs, inode_t * dir_inode);
+int direntry_next(mjfs_fs_t * fs, direntry_iter_t * direntry_iter);
+void direntry_iter_destroy(direntry_iter_t * direntry_iter);
+
 
 #endif //MINI_FS_MINI_FS_H
