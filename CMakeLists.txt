@@ -1,6 +1,18 @@
-cmake_minimum_required(VERSION 3.15)
-project(mini_fs C)
+cmake_minimum_required(VERSION 3.10)
+project(mini-fs C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(mini_fs main.c mini_fs.c mjfs_cli.c path.c bitmaps.c inode.c direntry.c)
+add_executable(mjfs
+        main.c
+        mjfs_cli.c)
+
+add_executable(mjfs_client
+        client_main.c)
+
+add_subdirectory(
+        ${mini-fs_SOURCE_DIR}/components
+)
+
+target_include_directories(mjfs PUBLIC
+        ${mini-fs_SOURCE_DIR}/components)

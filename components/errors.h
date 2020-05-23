@@ -12,6 +12,7 @@ enum error {
   ENOTADIR = -7, // operation with dir but passed file
   EEOFILE = -9, // it is end of file (on read)
   EALRDEX = -10,
+  EFSNOINIT = -11,
 };
 
 

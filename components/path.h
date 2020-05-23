@@ -5,6 +5,7 @@
 typedef struct path {
   char * full_path;
   char ** tokens;
+  int tokens_num;
 } path_t;
 
 path_t path_init(const char * path); // need to be free by destroy

@@ -213,7 +213,7 @@ int32_t fs_find_recursive(mjfs_fs_t * fs, inode_t * inode, path_t * path, int pa
   if (ENOTFOUND == inode_id || ENOTADIR == inode_id) {
     return ENOTFOUND;
   }
-  if (path->tokens[path_part + 1] == NULL) {
+  if (path_part + 1 >= path->tokens_num) {
     return inode_id;
   }
 
@@ -293,6 +293,7 @@ int fs_delete_from_dir_by_name(mjfs_fs_t * fs, inode_t * dir, const char * name,
     while (EEOFILE != direntry_next(fs, &direntry_iter)) {
       fs_delete_from_dir_by_name(fs, &deleted, direntry_iter.direntry.name, true);
     }
+    fs_delete_direntry_by_name(fs, dir, name);
     fs_delete_file_inode(fs, &deleted);
   } else if (deleted.is_dir && !recursive) {
     return ENOTADIR;
@@ -406,7 +407,7 @@ int fs_reload_current_dir(mjfs_fs_t * fs) {
   fs_load_inode(fs, fs->current_directory.id, &fs->current_directory);
 }
 
-int fs_lookup_directory(mjfs_fs_t * fs, const char * directory) {
+int fs_lookup_directory(mjfs_fs_t * fs, const char * directory, FILE * f) {
   inode_t dir;
   if (ENOTFOUND == fs_load_inode_by_path(fs, directory, &dir)) {
     return ENOTFOUND;
@@ -418,7 +419,7 @@ int fs_lookup_directory(mjfs_fs_t * fs, const char * directory) {
   direntry_iter_t direntry_iter = direntry_iter_init(fs, &dir);
   while (EEOFILE != direntry_next(fs, &direntry_iter)) {
     //char * inode_info = inode_info_str(&direntry_iter.direntry.);
-    printf("%s\n", direntry_iter.direntry.name);
+    fprintf(f, "%s\n", direntry_iter.direntry.name);
     //free(inode_info);
   }
 
@@ -469,19 +470,15 @@ int fs_create_directory(mjfs_fs_t * fs, const char * directory) {
   }
 
   inode_t parent;
-  if (directory[0] != '/') {
-    parent = fs->current_directory;
-  } else {
-    char * parent_path = path_get_parent(directory);
-    if (ENOTFOUND == fs_load_inode_by_path(fs, parent_path, &parent)) {
-      free(parent_path);
-      return ENOTFOUND;
-    }
+  char * parent_path = path_get_parent(directory);
+  if (ENOTFOUND == fs_load_inode_by_path(fs, parent_path, &parent)) {
     free(parent_path);
+    return ENOTFOUND;
+  }
+  free(parent_path);
 
-    if (!parent.is_dir) {
-      return ENOTADIR;
-    }
+  if (!parent.is_dir) {
+    return ENOTADIR;
   }
 
   if (ENOTFOUND != fs_find_inode_by_path(fs, directory)) {
@@ -520,19 +517,15 @@ int fs_create_file(mjfs_fs_t * fs, const char * file) {
   }
 
   inode_t parent;
-  if (file[0] != '/') {
-    parent = fs->current_directory;
-  } else {
-    char * parent_path = path_get_parent(file);
-    if (ENOTFOUND == fs_load_inode_by_path(fs, parent_path, &parent)) {
-      free(parent_path);
-      return ENOTFOUND;
-    }
+  char * parent_path = path_get_parent(file);
+  if (ENOTFOUND == fs_load_inode_by_path(fs, parent_path, &parent)) {
     free(parent_path);
+    return ENOTFOUND;
+  }
+  free(parent_path);
 
-    if (!parent.is_dir) {
-      return ENOTADIR;
-    }
+  if (!parent.is_dir) {
+    return ENOTADIR;
   }
 
   if (ENOTFOUND != fs_find_inode_by_path(fs, file)) {
@@ -557,19 +550,15 @@ int fs_create_file(mjfs_fs_t * fs, const char * file) {
 
 int fs_delete_directory(mjfs_fs_t * fs, const char * directory) {
   inode_t parent;
-  if (directory[0] != '/') {
-    parent = fs->current_directory;
-  } else {
-    char * parent_path = path_get_parent(directory);
-    if (ENOTFOUND == fs_load_inode_by_path(fs, parent_path, &parent)) {
-      free(parent_path);
-      return ENOTFOUND;
-    }
+  char * parent_path = path_get_parent(directory);
+  if (ENOTFOUND == fs_load_inode_by_path(fs, parent_path, &parent)) {
     free(parent_path);
+    return ENOTFOUND;
+  }
+  free(parent_path);
 
-    if (!parent.is_dir) {
-      return ENOTADIR;
-    }
+  if (!parent.is_dir) {
+    return ENOTADIR;
   }
 
   char * dir_name = path_get_last(directory);
@@ -581,19 +570,15 @@ int fs_delete_directory(mjfs_fs_t * fs, const char * directory) {
 
 int fs_delete_file(mjfs_fs_t * fs, const char * file) {
   inode_t parent;
-  if (file[0] != '/') {
-    parent = fs->current_directory;
-  } else {
-    char * parent_path = path_get_parent(file);
-    if (ENOTFOUND == fs_load_inode_by_path(fs, parent_path, &parent)) {
-      free(parent_path);
-      return ENOTFOUND;
-    }
+  char * parent_path = path_get_parent(file);
+  if (ENOTFOUND == fs_load_inode_by_path(fs, parent_path, &parent)) {
     free(parent_path);
+    return ENOTFOUND;
+  }
+  free(parent_path);
 
-    if (!parent.is_dir) {
-      return ENOTADIR;
-    }
+  if (!parent.is_dir) {
+    return ENOTADIR;
   }
 
   char * file_name = path_get_last(file);
@@ -634,6 +619,7 @@ int fs_load_to(mjfs_fs_t * fs, const char * external, const char * file) {
    }
 
    close(fd);
+   fs_reload_current_dir(fs);
    return 0;
 }
 
@@ -665,7 +651,7 @@ int fs_store_from(mjfs_fs_t * fs, const char * file, const char * external) {
   return 0;
 }
 
-int fs_cat(mjfs_fs_t * fs, const char * file) {
+int fs_cat(mjfs_fs_t * fs, const char * file, FILE * f) {
   inode_t file_inode;
   if (ENOTFOUND == fs_load_inode_by_path(fs, file, &file_inode)) {
     return ENOTFOUND;
@@ -673,16 +659,78 @@ int fs_cat(mjfs_fs_t * fs, const char * file) {
     return ENOTADIR;
   }
 
-  int bytes;
+  int bytes = 0;
   char buffer[16];
   while (bytes < file_inode.file_size) {
     int read_bytes = fs_read(fs, &file_inode, buffer, 16, bytes);
 
-    printf("%.*s", read_bytes, buffer);
+    fprintf(f,"%.*s", read_bytes, buffer);
     bytes += read_bytes;
   }
+  fflush(f);
 
   return 0;
+}
+
+int fs_mv(mjfs_fs_t * fs, const char * file, const char * destination) {
+  char * dest = path_get_last(destination);
+
+  if (strlen(dest) > sizeof(direntry_t) - 2 * sizeof(int32_t)) {
+    free(dest);
+    return ENOSPACE;
+  }
+
+  inode_t parent_file;
+  char * parent_path = path_get_parent(file);
+  if (ENOTFOUND == fs_load_inode_by_path(fs, parent_path, &parent_file)) {
+    free(parent_path);
+    return ENOTFOUND;
+  }
+  free(parent_path);
+
+  if (!parent_file.is_dir) {
+    return ENOTADIR;
+  }
+
+  inode_t parent_dest;
+  parent_dest = fs->current_directory;
+  parent_path = path_get_parent(destination);
+  if (ENOTFOUND == fs_load_inode_by_path(fs, parent_path, &parent_dest)) {
+    free(parent_path);
+    return ENOTFOUND;
+  }
+  free(parent_path);
+
+  if (!parent_file.is_dir) {
+    return ENOTADIR;
+  }
+
+  int32_t file_inode = fs_find_inode_by_path(fs, file);
+  if (ENOTFOUND == file_inode) {
+    return ENOTFOUND;
+  }
+
+  char * file_name = path_get_last(file);
+  char * dest_name = path_get_last(destination);
+
+
+  if (ENOTFOUND != fs_find_inode_in_dir(fs, &parent_dest, dest_name)) {
+    free(file_name);
+    free(dest_name);
+    return EALRDEX;
+  }
+
+  if (ENOSPACE == fs_write_to_dir(fs, &parent_dest, direntry_init(file_inode, dest_name))) {
+    free(file_name);
+    free(dest_name);
+    return ENOSPACE;
+  }
+
+  if (ENOTFOUND == fs_delete_direntry_by_name(fs, &parent_file, file_name)) {
+    free(file_name);
+    free(dest_name);
+    return ENOTFOUND;
+  }
 }
 
 /*----------s u p e r b l o c k----------*/
@@ -758,6 +806,7 @@ int direntry_next(mjfs_fs_t * fs, direntry_iter_t * direntry_iter) {
   int shift = fs_read_from_dir(fs, &direntry_iter->dir_inode, direntry_iter->read_offset, direntry_iter->next_direntry);
   if (EEOFILE == shift) {
     direntry_iter->next_direntry = NULL;
+    direntry_iter->direntry_offset += sizeof(direntry_t);
   } else {
     direntry_iter->direntry_offset = direntry_iter->read_offset;
     direntry_iter->read_offset += shift;

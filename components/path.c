@@ -10,15 +10,18 @@ path_t path_init(const char * path) {
   for (int ptr = 0; path[ptr] != '\0'; ++ptr, (path[ptr] == '/') ? ++occurrence : occurrence);
 
   new_path.full_path = calloc(strlen(path) + 1, 1);
-  new_path.tokens = calloc(occurrence + 1, sizeof(char *));
+  new_path.tokens = (char **)calloc(occurrence, sizeof(char *));
 
   strcpy(new_path.full_path, path);
   int ptr = 0;
-  new_path.tokens[ptr] = strtok(new_path.full_path, "/");
-  while (new_path.tokens[ptr] != NULL) {
+  char * tok = strtok(new_path.full_path, "/");
+  while (tok != NULL) {
+    new_path.tokens[ptr] = tok;
     ++ptr;
-    new_path.tokens[ptr] = strtok(NULL, "/");
+
+    tok = strtok(NULL, "/");
   }
+  new_path.tokens_num = ptr;
 
   return new_path;
 }
@@ -33,6 +36,12 @@ char * path_get_parent(const char * path) {
   int slash = end - 1;
   for (slash; slash >= 0 && path[slash] != '/'; --slash);
 
+  if (slash == -1) {
+    char * parent_path = calloc(2, 1);
+    parent_path[0] = '.';
+    parent_path[1] = '\0';
+    return parent_path;
+  }
   char * parent_path = calloc(slash + 1, 1);
   for (int i = 0; i < slash; ++i) {
     parent_path[i] = path[i];
@@ -46,9 +55,8 @@ char * path_get_last(const char * path) {
   int slash = end - 1;
   for (slash; slash >= 0 && path[slash] != '/'; --slash);
 
-  if (slash == -1) slash = 0;
   char * last_path = calloc(end - slash, 1);
-  strcpy(last_path, path + slash);
+  strcpy(last_path, path + slash + 1);
   return last_path;
 }
 

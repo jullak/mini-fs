@@ -78,12 +78,12 @@ int fs_write_to_dir(mjfs_fs_t * fs, inode_t * dir, direntry_t direntry); // priv
 
 int fs_read(mjfs_fs_t * fs, inode_t * inode, void * dest, uint32_t dest_len,
         uint32_t offset); // private // EOFILE or read_bytes
-int fs_read_from_dir(mjfs_fs_t * fs, inode_t * dir, uint32_t offset, direntry_t * direntry); // private // EOFILE
+int fs_read_from_dir(mjfs_fs_t * fs, inode_t * dir, uint32_t offset, direntry_t * direntry); // private // EEOFILE
 
 int fs_reload_current_dir(mjfs_fs_t * fs); // private
 
 //A P I
-int fs_lookup_directory(mjfs_fs_t * fs, const char * directory); // public // ENOTFOUND
+int fs_lookup_directory(mjfs_fs_t * fs, const char * directory, FILE * f); // public // ENOTFOUND
 int fs_set_current_directory(mjfs_fs_t * fs, const char * directory); // public // ENOTFOUND
 char * fs_pwd(mjfs_fs_t * fs); // does not to be free // could be NULL
 
@@ -96,7 +96,9 @@ int fs_delete_file(mjfs_fs_t * fs, const char * file); // public // ENOTFOUND or
 int fs_load_to(mjfs_fs_t * fs, const char * external, const char * file);
 int fs_store_from(mjfs_fs_t * fs, const char * file, const char * external);
 
-int fs_cat(mjfs_fs_t * fs, const char * file);
+int fs_cat(mjfs_fs_t * fs, const char * file, FILE * f);
+
+int fs_mv(mjfs_fs_t * fs, const char * file, const char * destination);
 
 /*----------d i r  e n t r y---------*/
 typedef struct direntry_iter {
